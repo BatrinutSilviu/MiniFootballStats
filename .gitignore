@@ -1,0 +1,21 @@
+## Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+
+## Data (videos, results, model weights — never commit these)
+backend/data/
+backend/models/*.pt
+*.mp4
+*.mov
+*.avi
+
+## Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+## OS / editor
+.DS_Store
+*.swp
