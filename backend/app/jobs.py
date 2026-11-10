@@ -2,35 +2,60 @@ import threading
 import traceback
 
 from app import storage
-from app.pipeline.pipeline import process_match
+from app.pipeline.pipeline import analyze_video, compute_results
+
+# Video analysis is CPU-heavy; running several at once just makes all of them slow.
+_analysis_slot = threading.Semaphore(1)
+
+ACTIVE_STATUSES = ("queued", "analyzing", "computing")
 
 
-def start_processing(match_id: str) -> None:
-    thread = threading.Thread(target=_run, args=(match_id,), daemon=True)
-    thread.start()
+def start_analysis(match_id: str) -> None:
+    storage.update_meta(match_id, status="queued", progress=0.0, error=None)
+    threading.Thread(target=_run_analysis, args=(match_id,), daemon=True).start()
 
 
-def _run(match_id: str) -> None:
-    meta = storage.load_meta(match_id)
-    meta["status"] = "processing"
-    meta["progress"] = 0.0
-    meta.pop("error", None)
-    storage.save_meta(match_id, meta)
+def start_compute(match_id: str) -> None:
+    storage.update_meta(match_id, status="computing", error=None)
+    threading.Thread(target=_run_compute, args=(match_id,), daemon=True).start()
 
-    def progress_cb(p: float):
-        m = storage.load_meta(match_id)
-        m["progress"] = round(p, 3)
-        storage.save_meta(match_id, m)
 
+def compute_now(match_id: str) -> None:
+    """Synchronous recompute (a few seconds), used after the user corrects the analysis."""
+    storage.update_meta(match_id, status="computing", error=None)
     try:
-        process_match(match_id, progress_cb=progress_cb)
-        meta = storage.load_meta(match_id)
-        meta["status"] = "done"
-        meta["progress"] = 1.0
-        storage.save_meta(match_id, meta)
+        compute_results(match_id)
+        storage.update_meta(match_id, status="done")
     except Exception as e:
         traceback.print_exc()
-        meta = storage.load_meta(match_id)
-        meta["status"] = "error"
-        meta["error"] = str(e)
-        storage.save_meta(match_id, meta)
+        storage.update_meta(match_id, status="error", error=str(e))
+        raise
+
+
+def mark_interrupted() -> None:
+    """Jobs run in-process; after a restart any active job is gone for good."""
+    for m in storage.list_matches():
+        if m.get("status") in ACTIVE_STATUSES:
+            storage.update_meta(m["id"], status="error", error="interrupted by a server restart — press retry")
+        if (m.get("highlights") or {}).get("status") == "rendering":
+            storage.update_meta(m["id"], highlights={"status": "error", "error": "interrupted by a server restart"})
+
+
+def _run_analysis(match_id: str) -> None:
+    with _analysis_slot:
+        storage.update_meta(match_id, status="analyzing", progress=0.0)
+        try:
+            analyze_video(match_id, progress_cb=lambda p: storage.update_meta(match_id, progress=round(p, 3)))
+            storage.update_meta(match_id, status="awaiting_calibration", progress=1.0)
+        except Exception as e:
+            traceback.print_exc()
+            storage.update_meta(match_id, status="error", error=str(e))
+
+
+def _run_compute(match_id: str) -> None:
+    try:
+        compute_results(match_id)
+        storage.update_meta(match_id, status="done")
+    except Exception as e:
+        traceback.print_exc()
+        storage.update_meta(match_id, status="error", error=str(e))

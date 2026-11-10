@@ -1,53 +1,82 @@
 import { useEffect, useState } from "react";
-import { getMatch } from "../api";
-import type { MatchMeta } from "../types";
+import { getMatch, retryMatch } from "../api";
+import type { MatchMeta, MatchStatus } from "../types";
+
+const STATUS_TEXT: Partial<Record<MatchStatus, string>> = {
+  queued: "Waiting for another video to finish…",
+  analyzing: "Detecting players and ball, following the camera…",
+  computing: "Computing stats, events and feedback…",
+};
 
 export default function Processing({
   matchId,
-  onDone,
+  onFinished,
 }: {
   matchId: string;
-  onDone: () => void;
+  onFinished: (status: MatchStatus) => void;
 }) {
   const [meta, setMeta] = useState<MatchMeta | null>(null);
+  const [pollKey, setPollKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let timer: number | undefined;
     const tick = async () => {
-      const m = await getMatch(matchId);
-      if (cancelled) return;
-      setMeta(m);
-      if (m.status === "done") {
-        onDone();
-        return;
+      try {
+        const m = await getMatch(matchId);
+        if (cancelled) return;
+        setMeta(m);
+        if (m.status === "awaiting_calibration" || m.status === "done") {
+          onFinished(m.status);
+          return;
+        }
+        if (m.status === "error") return;
+      } catch {
+        // backend briefly unreachable: keep polling
       }
-      if (m.status !== "error") {
-        setTimeout(tick, 1500);
-      }
+      if (!cancelled) timer = window.setTimeout(tick, 1500);
     };
     tick();
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [matchId, onDone]);
+  }, [matchId, onFinished, pollKey]);
+
+  async function retry() {
+    await retryMatch(matchId);
+    setMeta(null);
+    setPollKey((k) => k + 1);
+  }
 
   const pct = Math.round((meta?.progress ?? 0) * 100);
+  const computing = meta?.status === "computing";
 
   return (
     <div className="card">
       <h2>Analyzing match…</h2>
       <p className="hint">
-        Running detection + tracking on a laptop CPU can take a while for longer clips — this
-        runs in the background, feel free to leave the tab open.
+        The video is processed on this computer; on a laptop CPU this can take a while for longer
+        clips. You can leave this page and come back from “Past matches”.
       </p>
       {meta?.status === "error" ? (
-        <p className="error">Processing failed: {meta.error}</p>
+        <>
+          <p className="error">Processing failed: {meta.error}</p>
+          <button className="primary" onClick={retry}>
+            Retry
+          </button>
+        </>
       ) : (
         <>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="hint">{pct}% · status: {meta?.status ?? "…"}</p>
+          {!computing && (
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          <p className="hint">
+            {meta ? STATUS_TEXT[meta.status] ?? meta.status : "…"}
+            {meta?.status === "analyzing" && ` ${pct}%`}
+          </p>
         </>
       )}
     </div>

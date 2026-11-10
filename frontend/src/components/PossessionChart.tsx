@@ -11,7 +11,17 @@ import type { PossessionSample } from "../types";
 
 const BUCKETS = 24;
 
-export default function PossessionChart({ timeline }: { timeline: PossessionSample[] }) {
+const FALLBACK = { team_a: "#4fb3ff", team_b: "#ff8a4f" };
+
+export default function PossessionChart({
+  timeline,
+  colors,
+}: {
+  timeline: PossessionSample[];
+  colors: Record<string, string>;
+}) {
+  const a = colors.team_a ?? FALLBACK.team_a;
+  const b = colors.team_b ?? FALLBACK.team_b;
   if (timeline.length === 0) return null;
   const duration = timeline[timeline.length - 1].t || 1;
   const bucketSize = duration / BUCKETS;
@@ -46,8 +56,8 @@ export default function PossessionChart({ timeline }: { timeline: PossessionSamp
           contentStyle={{ background: "#12191c", border: "1px solid #2a3438" }}
           labelFormatter={(t) => `${t}s`}
         />
-        <Area type="monotone" dataKey="Team A %" stackId="1" stroke="#4fb3ff" fill="#4fb3ff55" />
-        <Area type="monotone" dataKey="Team B %" stackId="1" stroke="#ff8a4f" fill="#ff8a4f55" />
+        <Area type="monotone" dataKey="Team A %" stackId="1" stroke={a} fill={`${a}77`} />
+        <Area type="monotone" dataKey="Team B %" stackId="1" stroke={b} fill={`${b}77`} />
       </AreaChart>
     </ResponsiveContainer>
   );

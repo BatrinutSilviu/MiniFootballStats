@@ -7,3 +7,4 @@ opencv-python-headless==4.10.0.84
 numpy==1.26.4
 scikit-learn==1.5.2
 pydantic==2.9.2
+anthropic==2.3.0

@@ -23,9 +23,18 @@ export default function Upload({ onUploaded }: { onUploaded: (matchId: string) =
     <div className="card upload-card">
       <h2>Upload a match video</h2>
       <p className="hint">
-        Best results with a single fixed camera showing the whole pitch (sideline or elevated
-        corner).
+        Best results with a phone on a tripod, filming from a long side of the pitch, as high as you can.
       </p>
+      <details className="filming-tips">
+        <summary>How to film for the best stats</summary>
+        <ul>
+          <li><strong>High and central:</strong> stand, balcony or a 2–3 m tripod near the halfway line.</li>
+          <li><strong>Whole pitch in view</strong>, or pan slowly — no zoom jumps or cuts.</li>
+          <li><strong>1080p, 30 or 60 fps</strong>, landscape. Lock the exposure and avoid filming into the sun or floodlights.</li>
+          <li><strong>Different shirt colors</strong> for the two teams (bibs work), and a bright ball.</li>
+          <li><strong>Ask first:</strong> let everyone on the pitch know they are being filmed.</li>
+        </ul>
+      </details>
       <div
         className="dropzone"
         onClick={() => inputRef.current?.click()}
